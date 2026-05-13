@@ -1,0 +1,94 @@
+# sp-mcp
+
+MCP server for checking and restarting allowlisted `supervisorctl` programs across local or SSH hosts.
+
+The server intentionally does not expose arbitrary shell execution. Hosts and restartable programs must be declared in `config.json`.
+
+## Build
+
+```bash
+go build ./cmd/sp-mcp
+```
+
+## Run
+
+Stdio mode:
+
+```bash
+./sp-mcp -config config.example.json
+```
+
+HTTP mode for supervisor:
+
+```bash
+./sp-mcp -config /var/www/slp/sp-mcp/config.json -listen 127.0.0.1:18081
+```
+
+The server supports MCP-style JSON-RPC over stdio by default. With `-listen`, it exposes:
+
+- `GET /healthz`
+- `POST /mcp`
+
+## Tools
+
+- `list_supervisor_targets`: list configured hosts, targets, and allowed programs.
+- `supervisor_status`: run `supervisorctl status <program>` for selected targets.
+- `restart_supervisor_processes`: run `supervisorctl restart <program>` for selected targets.
+
+Example restart arguments:
+
+```json
+{
+  "targets": ["api-a", "api-b"],
+  "programs": ["slp-api"]
+}
+```
+
+Omit `programs` to restart every allowlisted program for the selected targets.
+
+## Configuration
+
+```json
+{
+  "max_bytes_per_response": 65536,
+  "command_timeout_seconds": 30,
+  "max_parallel": 4,
+  "hosts": [
+    {
+      "id": "test-a",
+      "type": "ssh",
+      "ssh_target": "deploy@test-a.example.com",
+      "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
+      "supervisorctl": "supervisorctl"
+    }
+  ],
+  "targets": [
+    {
+      "id": "api-a",
+      "host": "test-a",
+      "name": "API on test-a",
+      "programs": ["slp-api", "slp-worker"]
+    }
+  ]
+}
+```
+
+`type` can be `ssh` or `local`. Remote commands are executed as:
+
+```text
+ssh <ssh_options...> <ssh_target> 'supervisorctl' 'restart|status' '<program>'
+```
+
+## Jenkins Deploy
+
+A typical deployment installs the binary and config under:
+
+```text
+/var/www/slp/sp-mcp
+```
+
+and installs:
+
+```text
+/etc/supervisor/conf.d/sp-mcp.conf
+```

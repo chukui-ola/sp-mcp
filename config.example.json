@@ -1,0 +1,35 @@
+{
+  "max_bytes_per_response": 65536,
+  "command_timeout_seconds": 30,
+  "max_parallel": 4,
+  "hosts": [
+    {
+      "id": "test-a",
+      "type": "ssh",
+      "ssh_target": "deploy@test-a.example.com",
+      "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
+      "supervisorctl": "supervisorctl"
+    },
+    {
+      "id": "test-b",
+      "type": "ssh",
+      "ssh_target": "deploy@test-b.example.com",
+      "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
+      "supervisorctl": "supervisorctl"
+    }
+  ],
+  "targets": [
+    {
+      "id": "api-a",
+      "host": "test-a",
+      "name": "API on test-a",
+      "programs": ["slp-api", "slp-worker"]
+    },
+    {
+      "id": "api-b",
+      "host": "test-b",
+      "name": "API on test-b",
+      "programs": ["slp-api", "slp-worker"]
+    }
+  ]
+}
