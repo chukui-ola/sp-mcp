@@ -70,6 +70,20 @@ pipeline {
       }
     }
 
+    stage('Sudo Preflight') {
+      steps {
+        sh '''
+          if ! $SUDO $INSTALL -d -m 0755 "$DEPLOY_DIR"; then
+            echo "ERROR: passwordless sudo is not configured for user: $(id -un)"
+            echo "Install deploy/sudoers/sp-mcp-jenkins on the Jenkins host as /etc/sudoers.d/sp-mcp-jenkins."
+            echo "If Jenkins runs as a different user, replace the leading username in that sudoers file."
+            echo "Validate it with: sudo visudo -cf /etc/sudoers.d/sp-mcp-jenkins"
+            exit 1
+          fi
+        '''
+      }
+    }
+
     stage('Deploy') {
       steps {
         sh '''

@@ -100,4 +100,6 @@ sudo install -m 0440 deploy/sudoers/sp-mcp-jenkins /etc/sudoers.d/sp-mcp-jenkins
 sudo visudo -cf /etc/sudoers.d/sp-mcp-jenkins
 ```
 
+If Jenkins reports `sudo: a password is required`, this sudoers file is missing on the Jenkins host or its username does not match the actual Jenkins process user. Check the user with `id -un` in the job log and adjust the first field in `deploy/sudoers/sp-mcp-jenkins` when needed.
+
 The supervisor process runs as `jenkins` so SSH-based restarts use the Jenkins user's key and `HOME=/var/lib/jenkins`.
