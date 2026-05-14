@@ -504,11 +504,11 @@ func (s Server) selectPrograms(target Target, host Host, requested []string) ([]
 func (s Server) discoverRunningPrograms(host Host) ([]string, error) {
 	timeout := time.Duration(s.cfg.CommandTimeoutSec) * time.Second
 	out, err := s.runner.Run(host, timeout, host.Supervisorctl, []string{"status"})
-	if err != nil {
-		return nil, err
-	}
 	programs := parseRunningPrograms(out)
 	if len(programs) == 0 {
+		if err != nil {
+			return nil, err
+		}
 		return nil, errors.New("no running supervisor programs found")
 	}
 	return programs, nil

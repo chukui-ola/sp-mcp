@@ -23,11 +23,11 @@ type fakeCall struct {
 
 func (r *fakeRunner) Run(host Host, _ time.Duration, name string, args []string) (string, error) {
 	r.calls = append(r.calls, fakeCall{host: host.ID, name: name, args: append([]string(nil), args...)})
+	if r.out != "" {
+		return r.out, r.err
+	}
 	if r.err != nil {
 		return "", r.err
-	}
-	if r.out != "" {
-		return r.out, nil
 	}
 	return "ok", nil
 }
@@ -108,6 +108,25 @@ func TestDynamicRunningProgramsAreAllowed(t *testing.T) {
 	}
 	if runner.calls[1].args[0] != "status" || runner.calls[1].args[1] != "rpc.pay" {
 		t.Fatalf("status args = %#v, want status rpc.pay", runner.calls[1].args)
+	}
+}
+
+func TestDynamicRunningProgramsUseStdoutWhenStatusExitsNonZero(t *testing.T) {
+	cfg := testConfig()
+	cfg.Targets = []Target{{ID: "all-a", Host: "a", IncludeRunningPrograms: true}}
+	cfg.targetsByID = map[string]Target{"all-a": cfg.Targets[0]}
+	runner := &fakeRunner{
+		out: "api RUNNING pid 1\nworker STOPPED\n",
+		err: errors.New("exit status 1"),
+	}
+	s := Server{cfg: cfg, runner: runner}
+
+	selected, err := s.selectPrograms(cfg.Targets[0], cfg.Hosts[0], nil)
+	if err != nil {
+		t.Fatalf("selectPrograms() error = %v", err)
+	}
+	if len(selected) != 1 || selected[0] != "api" {
+		t.Fatalf("selected = %#v, want api", selected)
 	}
 }
 

@@ -16,6 +16,20 @@
         "-o", "StrictHostKeyChecking=no"
       ],
       "supervisorctl": "supervisorctl"
+    },
+    {
+      "id": "dev-192-168-1-28",
+      "type": "ssh",
+      "ssh_target": "jenkins@192.168.1.28",
+      "ssh_options": [
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "ConnectionAttempts=1",
+        "-o", "NumberOfPasswordPrompts=0",
+        "-o", "PreferredAuthentications=publickey",
+        "-o", "StrictHostKeyChecking=no"
+      ],
+      "supervisorctl": "supervisorctl"
     }
   ],
   "targets": [
@@ -23,6 +37,12 @@
       "id": "dev-192-168-1-27-running",
       "host": "dev-192-168-1-27",
       "name": "dev 192.168.1.27 running supervisor programs",
+      "include_running_programs": true
+    },
+    {
+      "id": "dev-192-168-1-28-running",
+      "host": "dev-192-168-1-28",
+      "name": "dev 192.168.1.28 running supervisor programs",
       "include_running_programs": true
     }
   ]
