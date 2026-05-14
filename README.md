@@ -21,7 +21,7 @@ Stdio mode:
 HTTP mode for supervisor:
 
 ```bash
-./sp-mcp -config /var/www/slp/sp-mcp/config.json -listen 127.0.0.1:18081
+./sp-mcp -config /var/www/slp/sp-mcp/config.json -listen 127.0.0.1:18082
 ```
 
 The server supports MCP-style JSON-RPC over stdio by default. With `-listen`, it exposes:
