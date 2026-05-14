@@ -11,6 +11,7 @@ import (
 
 type fakeRunner struct {
 	calls []fakeCall
+	out   string
 	err   error
 }
 
@@ -24,6 +25,9 @@ func (r *fakeRunner) Run(host Host, _ time.Duration, name string, args []string)
 	r.calls = append(r.calls, fakeCall{host: host.ID, name: name, args: append([]string(nil), args...)})
 	if r.err != nil {
 		return "", r.err
+	}
+	if r.out != "" {
+		return r.out, nil
 	}
 	return "ok", nil
 }
@@ -53,9 +57,57 @@ func TestLoadConfigBuildsIndexesAndDefaults(t *testing.T) {
 }
 
 func TestSelectProgramsRejectsUnlistedProgram(t *testing.T) {
+	s := Server{}
 	target := Target{ID: "api-a", Programs: []string{"api"}}
-	if _, err := selectPrograms(target, []string{"worker"}); err == nil {
+	if _, err := s.selectPrograms(target, Host{}, []string{"worker"}); err == nil {
 		t.Fatalf("selectPrograms() error = nil, want rejection")
+	}
+}
+
+func TestParseRunningPrograms(t *testing.T) {
+	out := `api                            RUNNING   pid 123, uptime 0:01:00
+worker                         STOPPED   Not started
+group:rpc.pay                  RUNNING   pid 456, uptime 0:02:00
+api                            RUNNING   pid 789, uptime 0:03:00`
+
+	got := parseRunningPrograms(out)
+	want := []string{"api", "group:rpc.pay"}
+	if len(got) != len(want) {
+		t.Fatalf("parseRunningPrograms() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("parseRunningPrograms() = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func TestDynamicRunningProgramsAreAllowed(t *testing.T) {
+	cfg := testConfig()
+	cfg.Targets = []Target{{ID: "all-a", Host: "a", IncludeRunningPrograms: true}}
+	cfg.targetsByID = map[string]Target{"all-a": cfg.Targets[0]}
+	runner := &fakeRunner{out: "api RUNNING pid 1\nworker STOPPED\nrpc.pay RUNNING pid 2\n"}
+	s := Server{cfg: cfg, runner: runner}
+
+	out, err := s.supervisorStatus([]string{"all-a"}, []string{"rpc.pay"})
+	if err != nil {
+		t.Fatalf("supervisorStatus() error = %v", err)
+	}
+	var results []operationResult
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if len(results) != 1 || results[0].Program != "rpc.pay" {
+		t.Fatalf("results = %#v, want rpc.pay status", results)
+	}
+	if len(runner.calls) != 2 {
+		t.Fatalf("len(calls) = %d, want discover + status", len(runner.calls))
+	}
+	if runner.calls[0].args[0] != "status" || len(runner.calls[0].args) != 1 {
+		t.Fatalf("discover args = %#v, want status", runner.calls[0].args)
+	}
+	if runner.calls[1].args[0] != "status" || runner.calls[1].args[1] != "rpc.pay" {
+		t.Fatalf("status args = %#v, want status rpc.pay", runner.calls[1].args)
 	}
 }
 

@@ -54,6 +54,7 @@ pipeline {
           mkdir -p dist
           go build -ldflags="-s -w" -o dist/sp-mcp ./cmd/sp-mcp
           cp config.example.json dist/config.example.json
+          cp config.dev.json dist/config.dev.json
           cp deploy/supervisor/sp-mcp.conf dist/sp-mcp.supervisor.conf
         '''
       }
@@ -90,9 +91,7 @@ pipeline {
           $SUDO $INSTALL -d -m 0755 "$DEPLOY_DIR"
           $SUDO $INSTALL -m 0755 dist/sp-mcp "$DEPLOY_DIR/sp-mcp"
           $SUDO $INSTALL -m 0644 dist/config.example.json "$DEPLOY_DIR/config.example.json"
-          if [ ! -f "$DEPLOY_DIR/config.json" ]; then
-            $SUDO $INSTALL -m 0640 dist/config.example.json "$DEPLOY_DIR/config.json"
-          fi
+          $SUDO $INSTALL -m 0640 dist/config.dev.json "$DEPLOY_DIR/config.json"
           $SUDO $INSTALL -m 0644 deploy/supervisor/sp-mcp.conf "$SUPERVISOR_CONF"
           $SUDO $SUPERVISORCTL reread
           $SUDO $SUPERVISORCTL update

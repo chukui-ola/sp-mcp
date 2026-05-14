@@ -45,6 +45,7 @@ Example restart arguments:
 ```
 
 Omit `programs` to restart every allowlisted program for the selected targets.
+Targets can also set `include_running_programs: true` to allow every program currently reported as `RUNNING` by `supervisorctl status` on that host.
 
 ## Configuration
 
@@ -68,6 +69,12 @@ Omit `programs` to restart every allowlisted program for the selected targets.
       "host": "test-a",
       "name": "API on test-a",
       "programs": ["slp-api", "slp-worker"]
+    },
+    {
+      "id": "test-a-running",
+      "host": "test-a",
+      "name": "All running supervisor programs on test-a",
+      "include_running_programs": true
     }
   ]
 }

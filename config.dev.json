@@ -1,0 +1,29 @@
+{
+  "max_bytes_per_response": 262144,
+  "command_timeout_seconds": 30,
+  "max_parallel": 4,
+  "hosts": [
+    {
+      "id": "dev-192-168-1-27",
+      "type": "ssh",
+      "ssh_target": "jenkins@192.168.1.27",
+      "ssh_options": [
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "ConnectionAttempts=1",
+        "-o", "NumberOfPasswordPrompts=0",
+        "-o", "PreferredAuthentications=publickey",
+        "-o", "StrictHostKeyChecking=no"
+      ],
+      "supervisorctl": "supervisorctl"
+    }
+  ],
+  "targets": [
+    {
+      "id": "dev-192-168-1-27-running",
+      "host": "dev-192-168-1-27",
+      "name": "dev 192.168.1.27 running supervisor programs",
+      "include_running_programs": true
+    }
+  ]
+}

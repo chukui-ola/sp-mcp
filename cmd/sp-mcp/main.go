@@ -37,10 +37,11 @@ type Host struct {
 }
 
 type Target struct {
-	ID       string   `json:"id"`
-	Host     string   `json:"host"`
-	Name     string   `json:"name"`
-	Programs []string `json:"programs"`
+	ID                     string   `json:"id"`
+	Host                   string   `json:"host"`
+	Name                   string   `json:"name"`
+	Programs               []string `json:"programs"`
+	IncludeRunningPrograms bool     `json:"include_running_programs"`
 }
 
 type Server struct {
@@ -166,8 +167,8 @@ func loadConfig(path string) (Config, error) {
 		if _, ok := cfg.hostsByID[t.Host]; !ok {
 			return Config{}, fmt.Errorf("target %q references unknown host %q", t.ID, t.Host)
 		}
-		if len(t.Programs) == 0 {
-			return Config{}, fmt.Errorf("target %q requires at least one program", t.ID)
+		if len(t.Programs) == 0 && !t.IncludeRunningPrograms {
+			return Config{}, fmt.Errorf("target %q requires at least one program or include_running_programs", t.ID)
 		}
 		seen := map[string]bool{}
 		for _, program := range t.Programs {
@@ -323,7 +324,8 @@ func schema(t string, properties map[string]any, required []string) map[string]a
 func (s Server) callTool(name string, args json.RawMessage) (toolResult, error) {
 	switch name {
 	case "list_supervisor_targets":
-		return s.textResult(s.listTargets()), nil
+		out, err := s.listTargets()
+		return s.textResult(out), err
 	case "supervisor_status":
 		var in struct {
 			Targets  []string `json:"targets"`
@@ -363,28 +365,42 @@ func (s Server) textResult(text string) toolResult {
 	return toolResult{Content: []toolContent{{Type: "text", Text: text}}}
 }
 
-func (s Server) listTargets() string {
+func (s Server) listTargets() (string, error) {
 	type row struct {
-		ID       string   `json:"id"`
-		Host     string   `json:"host"`
-		HostType string   `json:"host_type"`
-		Name     string   `json:"name"`
-		Programs []string `json:"programs"`
+		ID                     string   `json:"id"`
+		Host                   string   `json:"host"`
+		HostType               string   `json:"host_type"`
+		Name                   string   `json:"name"`
+		Programs               []string `json:"programs"`
+		IncludeRunningPrograms bool     `json:"include_running_programs,omitempty"`
+		DiscoveryError         string   `json:"discovery_error,omitempty"`
 	}
 	rows := make([]row, 0, len(s.cfg.Targets))
 	for _, target := range s.cfg.Targets {
 		host := s.cfg.hostsByID[target.Host]
+		programs := append([]string(nil), target.Programs...)
+		var discoveryError string
+		if target.IncludeRunningPrograms {
+			discovered, err := s.discoverRunningPrograms(host)
+			if err != nil {
+				discoveryError = err.Error()
+			} else {
+				programs = mergePrograms(programs, discovered)
+			}
+		}
 		rows = append(rows, row{
-			ID:       target.ID,
-			Host:     target.Host,
-			HostType: host.Type,
-			Name:     target.Name,
-			Programs: append([]string(nil), target.Programs...),
+			ID:                     target.ID,
+			Host:                   target.Host,
+			HostType:               host.Type,
+			Name:                   target.Name,
+			Programs:               programs,
+			IncludeRunningPrograms: target.IncludeRunningPrograms,
+			DiscoveryError:         discoveryError,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
 	data, _ := json.MarshalIndent(rows, "", "  ")
-	return string(data)
+	return string(data), nil
 }
 
 func (s Server) supervisorStatus(targetIDs, programs []string) (string, error) {
@@ -421,11 +437,11 @@ func (s Server) selectJobs(targetIDs, programs []string) ([]job, error) {
 	}
 	var jobs []job
 	for _, target := range targets {
-		selected, err := selectPrograms(target, programs)
+		host := s.cfg.hostsByID[target.Host]
+		selected, err := s.selectPrograms(target, host, programs)
 		if err != nil {
 			return nil, err
 		}
-		host := s.cfg.hostsByID[target.Host]
 		for _, program := range selected {
 			jobs = append(jobs, job{target: target, host: host, program: program})
 		}
@@ -455,12 +471,20 @@ func (s Server) selectTargets(ids []string) ([]Target, error) {
 	return targets, nil
 }
 
-func selectPrograms(target Target, requested []string) ([]string, error) {
+func (s Server) selectPrograms(target Target, host Host, requested []string) ([]string, error) {
+	programs := append([]string(nil), target.Programs...)
+	if target.IncludeRunningPrograms {
+		discovered, err := s.discoverRunningPrograms(host)
+		if err != nil {
+			return nil, fmt.Errorf("discover running programs for target %q: %w", target.ID, err)
+		}
+		programs = mergePrograms(programs, discovered)
+	}
 	if len(requested) == 0 {
-		return append([]string(nil), target.Programs...), nil
+		return programs, nil
 	}
 	allowed := map[string]bool{}
-	for _, program := range target.Programs {
+	for _, program := range programs {
 		allowed[program] = true
 	}
 	var selected []string
@@ -475,6 +499,51 @@ func selectPrograms(target Target, requested []string) ([]string, error) {
 		}
 	}
 	return selected, nil
+}
+
+func (s Server) discoverRunningPrograms(host Host) ([]string, error) {
+	timeout := time.Duration(s.cfg.CommandTimeoutSec) * time.Second
+	out, err := s.runner.Run(host, timeout, host.Supervisorctl, []string{"status"})
+	if err != nil {
+		return nil, err
+	}
+	programs := parseRunningPrograms(out)
+	if len(programs) == 0 {
+		return nil, errors.New("no running supervisor programs found")
+	}
+	return programs, nil
+}
+
+func parseRunningPrograms(out string) []string {
+	var programs []string
+	seen := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[1] != "RUNNING" {
+			continue
+		}
+		program := fields[0]
+		if !seen[program] {
+			programs = append(programs, program)
+			seen[program] = true
+		}
+	}
+	sort.Strings(programs)
+	return programs
+}
+
+func mergePrograms(base, extra []string) []string {
+	seen := map[string]bool{}
+	var merged []string
+	for _, program := range append(base, extra...) {
+		if program == "" || seen[program] {
+			continue
+		}
+		merged = append(merged, program)
+		seen[program] = true
+	}
+	sort.Strings(merged)
+	return merged
 }
 
 func (s Server) runJobs(action string, jobs []job) []operationResult {
