@@ -92,3 +92,12 @@ and installs:
 ```text
 /etc/supervisor/conf.d/sp-mcp.conf
 ```
+
+The Jenkins job expects passwordless sudo for a narrow set of install and supervisor commands. Install and validate:
+
+```bash
+sudo install -m 0440 deploy/sudoers/sp-mcp-jenkins /etc/sudoers.d/sp-mcp-jenkins
+sudo visudo -cf /etc/sudoers.d/sp-mcp-jenkins
+```
+
+The supervisor process runs as `jenkins` so SSH-based restarts use the Jenkins user's key and `HOME=/var/lib/jenkins`.

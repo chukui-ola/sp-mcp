@@ -7,14 +7,28 @@
       "id": "test-a",
       "type": "ssh",
       "ssh_target": "deploy@test-a.example.com",
-      "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
+      "ssh_options": [
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "ConnectionAttempts=1",
+        "-o", "NumberOfPasswordPrompts=0",
+        "-o", "PreferredAuthentications=publickey",
+        "-o", "StrictHostKeyChecking=no"
+      ],
       "supervisorctl": "supervisorctl"
     },
     {
       "id": "test-b",
       "type": "ssh",
       "ssh_target": "deploy@test-b.example.com",
-      "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
+      "ssh_options": [
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "ConnectionAttempts=1",
+        "-o", "NumberOfPasswordPrompts=0",
+        "-o", "PreferredAuthentications=publickey",
+        "-o", "StrictHostKeyChecking=no"
+      ],
       "supervisorctl": "supervisorctl"
     }
   ],

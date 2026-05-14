@@ -1,0 +1,16 @@
+# Install this file on the Jenkins host as:
+#   /etc/sudoers.d/sp-mcp-jenkins
+#
+# Validate before installing:
+#   visudo -cf deploy/sudoers/sp-mcp-jenkins
+#
+# Adjust the username if your Jenkins service does not run as "jenkins".
+
+jenkins ALL=(root) NOPASSWD: /usr/bin/install -d -m 0755 /var/www/slp/sp-mcp
+jenkins ALL=(root) NOPASSWD: /usr/bin/install -m 0755 * /var/www/slp/sp-mcp/sp-mcp
+jenkins ALL=(root) NOPASSWD: /usr/bin/install -m 0644 * /var/www/slp/sp-mcp/config.example.json
+jenkins ALL=(root) NOPASSWD: /usr/bin/install -m 0640 * /var/www/slp/sp-mcp/config.json
+jenkins ALL=(root) NOPASSWD: /usr/bin/install -m 0644 * /etc/supervisor/conf.d/sp-mcp.conf
+jenkins ALL=(root) NOPASSWD: /usr/bin/supervisorctl reread
+jenkins ALL=(root) NOPASSWD: /usr/bin/supervisorctl update
+jenkins ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart sp-mcp
