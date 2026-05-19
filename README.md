@@ -60,7 +60,8 @@ Targets can also set `include_running_programs: true` to allow every program cur
       "type": "ssh",
       "ssh_target": "deploy@test-a.example.com",
       "ssh_options": ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"],
-      "supervisorctl": "supervisorctl"
+      "supervisorctl": "supervisorctl",
+      "supervisorctl_args": []
     }
   ],
   "targets": [
@@ -84,6 +85,15 @@ Targets can also set `include_running_programs: true` to allow every program cur
 
 ```text
 ssh <ssh_options...> <ssh_target> 'supervisorctl' 'restart|status' '<program>'
+```
+
+Set `supervisorctl` plus `supervisorctl_args` when the remote host requires a fixed wrapper, for example:
+
+```json
+{
+  "supervisorctl": "sudo",
+  "supervisorctl_args": ["-n", "/usr/bin/supervisorctl"]
+}
 ```
 
 ## Jenkins Deploy

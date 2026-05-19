@@ -130,6 +130,46 @@ func TestDynamicRunningProgramsUseStdoutWhenStatusExitsNonZero(t *testing.T) {
 	}
 }
 
+func TestDynamicRunningProgramsUseErrorTextWhenStatusOutputIsThere(t *testing.T) {
+	cfg := testConfig()
+	cfg.Targets = []Target{{ID: "all-a", Host: "a", IncludeRunningPrograms: true}}
+	cfg.targetsByID = map[string]Target{"all-a": cfg.Targets[0]}
+	runner := &fakeRunner{
+		err: errors.New("api RUNNING pid 1\nworker STOPPED\n"),
+	}
+	s := Server{cfg: cfg, runner: runner}
+
+	selected, err := s.selectPrograms(cfg.Targets[0], cfg.Hosts[0], nil)
+	if err != nil {
+		t.Fatalf("selectPrograms() error = %v", err)
+	}
+	if len(selected) != 1 || selected[0] != "api" {
+		t.Fatalf("selected = %#v, want api", selected)
+	}
+}
+
+func TestSupervisorStatusReportsDiscoveryFailureForDynamicTarget(t *testing.T) {
+	cfg := testConfig()
+	cfg.Targets = []Target{{ID: "all-a", Host: "a", IncludeRunningPrograms: true}}
+	cfg.targetsByID = map[string]Target{"all-a": cfg.Targets[0]}
+	s := Server{cfg: cfg, runner: &fakeRunner{err: errors.New("exit status 1")}}
+
+	out, err := s.supervisorStatus([]string{"all-a"}, nil)
+	if err != nil {
+		t.Fatalf("supervisorStatus() error = %v", err)
+	}
+	var results []operationResult
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if len(results) != 1 || results[0].OK || results[0].Action != "discover" {
+		t.Fatalf("results = %#v, want one discovery failure", results)
+	}
+	if results[0].Error != "discover running programs for target \"all-a\": exit status 1" {
+		t.Fatalf("error = %q", results[0].Error)
+	}
+}
+
 func TestRestartUsesOnlySelectedTargetsAndPrograms(t *testing.T) {
 	cfg := testConfig()
 	runner := &fakeRunner{}

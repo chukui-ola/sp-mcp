@@ -29,11 +29,12 @@ type Config struct {
 }
 
 type Host struct {
-	ID            string   `json:"id"`
-	Type          string   `json:"type"`
-	SSHTarget     string   `json:"ssh_target"`
-	SSHOptions    []string `json:"ssh_options"`
-	Supervisorctl string   `json:"supervisorctl"`
+	ID                string   `json:"id"`
+	Type              string   `json:"type"`
+	SSHTarget         string   `json:"ssh_target"`
+	SSHOptions        []string `json:"ssh_options"`
+	Supervisorctl     string   `json:"supervisorctl"`
+	SupervisorctlArgs []string `json:"supervisorctl_args"`
 }
 
 type Target struct {
@@ -404,11 +405,12 @@ func (s Server) listTargets() (string, error) {
 }
 
 func (s Server) supervisorStatus(targetIDs, programs []string) (string, error) {
-	jobs, err := s.selectJobs(targetIDs, programs)
+	jobs, discoveryFailures, err := s.selectStatusJobs(targetIDs, programs)
 	if err != nil {
 		return "", err
 	}
 	results := s.runJobs("status", jobs)
+	results = append(discoveryFailures, results...)
 	return marshalResults(results)
 }
 
@@ -447,6 +449,37 @@ func (s Server) selectJobs(targetIDs, programs []string) ([]job, error) {
 		}
 	}
 	return jobs, nil
+}
+
+func (s Server) selectStatusJobs(targetIDs, programs []string) ([]job, []operationResult, error) {
+	targets, err := s.selectTargets(targetIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	var jobs []job
+	var discoveryFailures []operationResult
+	for _, target := range targets {
+		host := s.cfg.hostsByID[target.Host]
+		selected, err := s.selectPrograms(target, host, programs)
+		if err != nil {
+			if target.IncludeRunningPrograms && len(target.Programs) == 0 && len(programs) == 0 {
+				discoveryFailures = append(discoveryFailures, operationResult{
+					Target:   target.ID,
+					Host:     host.ID,
+					Action:   "discover",
+					OK:       false,
+					Error:    err.Error(),
+					Duration: "0s",
+				})
+				continue
+			}
+			return nil, nil, err
+		}
+		for _, program := range selected {
+			jobs = append(jobs, job{target: target, host: host, program: program})
+		}
+	}
+	return jobs, discoveryFailures, nil
 }
 
 func (s Server) selectTargets(ids []string) ([]Target, error) {
@@ -503,15 +536,47 @@ func (s Server) selectPrograms(target Target, host Host, requested []string) ([]
 
 func (s Server) discoverRunningPrograms(host Host) ([]string, error) {
 	timeout := time.Duration(s.cfg.CommandTimeoutSec) * time.Second
-	out, err := s.runner.Run(host, timeout, host.Supervisorctl, []string{"status"})
-	programs := parseRunningPrograms(out)
+	name, args := supervisorCommand(host, "status")
+	out, err := s.runner.Run(host, timeout, name, args)
+	programs := parseRunningPrograms(commandOutputWithError(out, err))
 	if len(programs) == 0 {
 		if err != nil {
-			return nil, err
+			return nil, discoveryCommandError(err, out)
 		}
 		return nil, errors.New("no running supervisor programs found")
 	}
 	return programs, nil
+}
+
+func commandOutputWithError(out string, err error) string {
+	if err == nil {
+		return out
+	}
+	errText := strings.TrimSpace(err.Error())
+	if errText == "" {
+		return out
+	}
+	if strings.TrimSpace(out) == "" {
+		return errText
+	}
+	return out + "\n" + errText
+}
+
+func discoveryCommandError(err error, out string) error {
+	detail := strings.TrimSpace(out)
+	if detail == "" || detail == strings.TrimSpace(err.Error()) {
+		return err
+	}
+	return fmt.Errorf("%w; no RUNNING supervisor programs found in output: %s", err, truncateForError(detail))
+}
+
+func truncateForError(s string) string {
+	const max = 2048
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...[truncated]"
 }
 
 func parseRunningPrograms(out string) []string {
@@ -570,7 +635,8 @@ func (s Server) runJobs(action string, jobs []job) []operationResult {
 func (s Server) runSupervisorAction(action string, j job) operationResult {
 	start := time.Now()
 	timeout := time.Duration(s.cfg.CommandTimeoutSec) * time.Second
-	out, err := s.runner.Run(j.host, timeout, j.host.Supervisorctl, []string{action, j.program})
+	name, args := supervisorCommand(j.host, action, j.program)
+	out, err := s.runner.Run(j.host, timeout, name, args)
 	result := operationResult{
 		Target:   j.target.ID,
 		Host:     j.host.ID,
@@ -584,6 +650,12 @@ func (s Server) runSupervisorAction(action string, j job) operationResult {
 		result.Error = err.Error()
 	}
 	return result
+}
+
+func supervisorCommand(host Host, args ...string) (string, []string) {
+	supervisorArgs := append([]string(nil), host.SupervisorctlArgs...)
+	supervisorArgs = append(supervisorArgs, args...)
+	return host.Supervisorctl, supervisorArgs
 }
 
 func marshalResults(results []operationResult) (string, error) {
@@ -615,10 +687,15 @@ func (execRunner) Run(host Host, timeout time.Duration, name string, args []stri
 	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
+		outText := string(out)
 		if msg == "" {
 			msg = err.Error()
+		} else if strings.TrimSpace(outText) != "" {
+			outText = outText + "\n" + msg
+		} else {
+			outText = msg
 		}
-		return string(out), errors.New(msg)
+		return outText, errors.New(msg)
 	}
 	return string(out), nil
 }

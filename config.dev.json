@@ -15,7 +15,8 @@
         "-o", "PreferredAuthentications=publickey",
         "-o", "StrictHostKeyChecking=no"
       ],
-      "supervisorctl": "supervisorctl"
+      "supervisorctl": "sudo",
+      "supervisorctl_args": ["-n", "/usr/bin/supervisorctl"]
     },
     {
       "id": "dev-192-168-1-28",
@@ -29,7 +30,8 @@
         "-o", "PreferredAuthentications=publickey",
         "-o", "StrictHostKeyChecking=no"
       ],
-      "supervisorctl": "supervisorctl"
+      "supervisorctl": "sudo",
+      "supervisorctl_args": ["-n", "/usr/bin/supervisorctl"]
     }
   ],
   "targets": [
