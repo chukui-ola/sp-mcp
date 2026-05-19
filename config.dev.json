@@ -34,6 +34,12 @@
   ],
   "targets": [
     {
+      "id": "slp-go-http",
+      "host": "dev-192-168-1-27",
+      "name": "slp-go dev http service",
+      "programs": ["slp.gohttp"]
+    },
+    {
       "id": "dev-192-168-1-27-running",
       "host": "dev-192-168-1-27",
       "name": "dev 192.168.1.27 running supervisor programs",
